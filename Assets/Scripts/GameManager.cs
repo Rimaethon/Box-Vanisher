@@ -1,68 +1,101 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TMPro;
-using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 public class GameManager : MonoBehaviour
 {
-    public TextMeshProUGUI scoreText;
-    public TextMeshProUGUI gameOverText;
-    public GameObject titleScreen;
-    public Button restartButton;
-    public bool isGameActive;
-    private int score;
-    public List<GameObject> targets;
-    private float spawnRate=3.0f;
+    public List<GameObject> targetPrefabs;
+    public GameObject explosionPrefab;
+    private float spawnRate = 1.0f;
+    private int currentTargetIndex = 0;
+    private Dictionary<Transform, Target> targetMap = new Dictionary<Transform, Target>();
 
-
-    // Start is called before the first frame update
     void Start()
-    {   
-    }
-
-    // Update is called once per frame
-    void Update()
     {
-        
-    }
-    
-    IEnumerator SpawnTarget()
-    {   
-        while(isGameActive)
-        {
-        yield return new WaitForSeconds(spawnRate);
-        int index=Random.Range(0,targets.Count);
-        Instantiate(targets[index]);
 
+        StartCoroutine(SpawnTarget());
+    }
+
+    IEnumerator SpawnTarget()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(spawnRate);
+            
+            Transform targetTransform = targetPrefabs[currentTargetIndex].transform;
+            targetTransform.position = RandomSpawnPos();
+            targetTransform.gameObject.SetActive(true);
+
+            currentTargetIndex = (currentTargetIndex + 1) % targetPrefabs.Count;
         }
     }
-    public void GameOver(){
-
-        gameOverText.gameObject.SetActive(true);
-        isGameActive=false;
-        restartButton.gameObject.SetActive(true);
-    }    
-
-    public void RestartGame()
-    {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
-    }
     
-    public void UptadeScore(int scoreToAdd)
+
+    public void ReturnTargetToPool(Transform targetTransform)
     {
-        score +=scoreToAdd;
-        scoreText.text="Score: " + score;
+        targetTransform.gameObject.SetActive(false);
     }
-    public void StartGame(int difficulty)
+
+    public void ReturnExplosionToPool(GameObject explosion)
     {
-        spawnRate= spawnRate/difficulty;
-        isGameActive=true;
-        StartCoroutine(SpawnTarget());
-        score=0;
-        UptadeScore(0);
-        titleScreen.gameObject.SetActive(false);
-        
+        explosion.SetActive(false);
+    }
+
+    Vector3 RandomSpawnPos()
+    {
+        float xRange = 4;
+        float ySpawnPos = 1;
+        return new Vector3(Random.Range(-xRange, xRange), ySpawnPos);
+    }
+}
+
+public class Target : MonoBehaviour
+{
+    private Rigidbody targetRb;
+    private GameManager gameManager;
+    private float minSpeed = 9;
+    private float maxSpeed = 12;
+    private float maxTorque = 7;
+    public int pointValue;
+
+    public ParticleSystem explosionParticle;
+
+    void Start()
+    {
+        targetRb = GetComponent<Rigidbody>();
+        gameManager = FindObjectOfType<GameManager>();
+
+        targetRb.AddForce(RandomForce(), ForceMode.Impulse);
+        targetRb.AddTorque(RandomTorque(), RandomTorque(), RandomTorque(), ForceMode.Impulse);
+
+        gameObject.SetActive(false);
+    }
+
+    private void OnMouseDown()
+    {
+        gameObject.SetActive(false);
+
+        GameObject explosion = Instantiate(gameManager.explosionPrefab, transform.position, Quaternion.identity);
+        explosion.SetActive(true);
+        explosion.transform.parent = transform;
+
+        StartCoroutine(ReturnExplosionToPool(explosion));
+    }
+
+    IEnumerator ReturnExplosionToPool(GameObject explosion)
+    {
+        yield return new WaitForSeconds(1f); // Wait for 1 second before returning the explosion to the pool
+        explosion.transform.parent = null;
+        gameManager.ReturnExplosionToPool(explosion);
+    }
+
+    Vector3 RandomForce()
+    {
+        return Vector3.up * Random.Range(minSpeed, maxSpeed);
+    }
+
+    float RandomTorque()
+    {
+        return Random.Range(-maxTorque, maxTorque);
     }
 }
